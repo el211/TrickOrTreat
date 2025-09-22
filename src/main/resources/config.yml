@@ -1,0 +1,70 @@
+# ===============================
+# TrickOrTreatPlugin - config.yml
+# ===============================
+
+libdisguise:
+  enabled: true
+  login:
+    enabled: true
+    delay-ticks: 5
+    persistent: true          # if false, uses duration-seconds
+    duration-seconds: 600
+    undisguise-on-quit: true
+    mode: "default"           # default | random | group | permission
+    default-mob: "ZOMBIE"
+    random-pool: ["ZOMBIE","SKELETON","CREEPER","WITCH","HUSK","STRAY"]
+    groups:
+      vip: "WITHER_SKELETON"
+      elite: "WITCH"
+      default: "ZOMBIE"
+    permissions:
+      - node: "trickortreat.disguise.CREEPER"
+        mob: "CREEPER"
+      - node: "trickortreat.disguise.HUSK"
+        mob: "HUSK"
+
+
+default-cooldown: 60
+reward-per-luckpermsgroups: true
+
+custom-cooldowns:
+  default: 60
+  vip: 30
+  elite: 10
+
+rewards:
+  default:
+    tricks:
+      command: "effect give %player% slowness 10 1"
+      message: "§cTRICK! Slowness for you..."
+      event:
+        firework: false
+        sound: "ENTITY_WITCH_CELEBRATE"
+    treats:
+      command: "give %player% cookie 5"
+      message: "§aTREAT! Enjoy cookies!"
+      event:
+        firework: true
+        sound: "ENTITY_PLAYER_LEVELUP"
+
+  vip:
+    tricks:
+      command: "effect give %player% blindness 5 1"
+      message: "§cTRICK! Short blind..."
+      event:
+        firework: false
+    treats:
+      command: "give %player% golden_apple 1"
+      message: "§aVIP TREAT! Golden apple!"
+      event:
+        firework: true
+
+villager-interaction:
+  cancel-trade: true
+  only-named: ""
+  require-empty-hand: false
+  treat-chance: 0.5
+  messages:
+    cooldown: "§cYou are on cooldown. Please wait %seconds% seconds."
+    no-reward: "§cNo rewards configured."
+    require-empty-hand: "§cEmpty your hand to trick-or-treat!"

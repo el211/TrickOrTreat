@@ -1,0 +1,46 @@
+# Number of pumpkins to find to win the event (used when levels.enabled = false)
+total-pumpkins: 10
+
+rules:
+  count-player-placed: false
+  count-grown: true
+  count-natural: true
+
+# Per-break rewards (unchanged)
+pumpkin-rewards:
+  - command: give %player% minecraft:cookie 5
+    message: "§aYou found a hidden pumpkin and got some cookies!"
+    event:
+      sound: minecraft:entity.player.levelup
+      firework: true
+
+# Optional: legacy single-win (used when levels.enabled = false)
+win-event:
+  command: give %player% minecraft:nether_star 1
+  message: "§6Congratulations! You have found all the pumpkins and won a special reward!"
+  event:
+    sound: minecraft:entity.ender_dragon.death
+    firework: true
+
+# === NEW: Multi-level progression ===
+levels:
+  enabled: true
+  count: 5
+  # If omitted/shorter than count, missing entries use total-pumpkins
+  targets: [10, 10, 10, 10, 30]
+
+  # Reward after EACH level
+  per-level-win:
+    command: "say %player% completed a pumpkin level!"
+    message: "§6Level complete!"
+    event:
+      sound: minecraft:entity.player.levelup
+      firework: true
+
+  # Reward after ALL levels are complete (big win)
+  big-win:
+    command: "say %player% completed ALL pumpkin levels!"
+    message: "§6§lAll levels complete! You got the big prize!"
+    event:
+      sound: minecraft:entity.ender_dragon.death
+      firework: true

@@ -1,0 +1,29 @@
+name: TrickOrTreatPlugin
+version: '2.5'
+main: fr.elias.trickortreatplugin.TrickOrTreatPlugin
+api-version: '1.20'
+softdepend: [LibsDisguises, LuckPerms]  # Add LuckPerms as a soft dependency
+commands:
+  spawnheadlesshorseman:
+    description: Spawns the Headless Horseman boss.
+    usage: /spawnheadlesshorseman
+    permission: trickortreat.admin
+
+  ttdisguise:
+    description: Disguises the player as a specified mob.
+    usage: /ttdisguise <mob>
+    permission: trickortreat.disguise
+
+  ttrevert:
+    description: revert the Disguises of the player.
+    usage: /ttrevert
+
+  listdisguisetypes:
+    description: Lists all valid mob types for disguising.
+    usage: /listdisguisetypes
+    permission: trickortreat.disguise.list
+  tt:
+    description: TrickOrTreat commands
+    usage: /tt pumpkins
+    aliases: [trickortreat]
+    permission: trickortreat.command

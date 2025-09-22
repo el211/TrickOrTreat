@@ -1,0 +1,64 @@
+spooky-mobs:
+  zombie:
+    spawn-chance: 0.3
+    head: "CARVED_PUMPKIN"
+    sound: "entity_zombie_ambient"
+    # Optional LD fields if you want entity disguises:
+    disguise-as: "HUSK"
+    disguise-chance: 0.25
+    disguise-duration-seconds: 30
+
+  skeleton:
+    spawn-chance: 0.25
+    head: "SKELETON_SKULL"
+    sound: "entity_skeleton_ambient"
+    disguise-as: "STRAY"
+    disguise-chance: 0.20
+    disguise-duration-seconds: 30
+
+jump-scares:
+  ghost-mob:
+    spawn-chance: 0.15
+    sound: "entity_phantom_swoop"
+    disguise-as: "PHANTOM"
+    disguise-duration-seconds: 3
+
+boss-mobs:
+  headless-horseman:
+    # Make spawning deterministic for testing
+    spawn-chance: 1.0
+    health: 150.0
+    sound: "entity_lightning_bolt_thunder"
+
+    reward:
+      random-commands:
+        - "give %player% nether_star 1"
+        - "give %player% diamond 3"
+        - "xp add %player% 1000"
+      message: "&6The Headless Horseman has been defeated! A random reward has been given!"
+      sound: "entity_wither_death"
+
+    define-spawn-location: true
+    # !!! Make sure this world name exists and is loaded !!!
+    spawn-location: "royaume,0.500,66,-17.082"
+
+    # Short cooldown so auto-spawns can re-trigger quickly while testing
+    cooldown-of-spawn-after-death: 30
+
+    message-on-spawn: "The Haunted Horseman has spawned in the arena"
+
+    # --- Auto spawner: FAST test values ---
+    auto:
+      enabled: true
+      interval-seconds: 10        # try every 10s
+      region-radius: 256          # spawn if a player is within 256 blocks of the center
+      world-time:
+        from: 0                   # allow any time of day
+        to: 23999
+      # NEW:
+      require-player-nearby: false    # <-- set false to spawn even with no players nearby
+      force-load-chunk: true          # <-- load/keep the chunk so the boss survives without players
+      keep-loaded-seconds: 120        # how long to keep the chunk forced after spawn
+logging:
+  spooky-mobs: false     # set true to log "A spooky ... spawned"
+  jump-scares: false     # set true to log "A ghost mob jump scare occurred!"
