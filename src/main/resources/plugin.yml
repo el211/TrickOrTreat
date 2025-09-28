@@ -1,29 +1,31 @@
-name: TrickOrTreatPlugin
+name: TrickOrTreat
 version: '2.5'
 main: fr.elias.trickortreatplugin.TrickOrTreatPlugin
 api-version: '1.20'
-softdepend: [LibsDisguises, LuckPerms]  # Add LuckPerms as a soft dependency
+softdepend: [LibsDisguises, LuckPerms, PlaceholderAPI]
+
 commands:
-  spawnheadlesshorseman:
-    description: Spawns the Headless Horseman boss.
-    usage: /spawnheadlesshorseman
-    permission: trickortreat.admin
-
-  ttdisguise:
-    description: Disguises the player as a specified mob.
-    usage: /ttdisguise <mob>
-    permission: trickortreat.disguise
-
-  ttrevert:
-    description: revert the Disguises of the player.
-    usage: /ttrevert
-
-  listdisguisetypes:
-    description: Lists all valid mob types for disguising.
-    usage: /listdisguisetypes
-    permission: trickortreat.disguise.list
   tt:
-    description: TrickOrTreat commands
-    usage: /tt pumpkins
+    description: TrickOrTreat main command
+    usage: /tt <help|pumpkins|horseman|reload>
     aliases: [trickortreat]
-    permission: trickortreat.command
+
+permissions:
+  trickortreat.*:
+    description: All TrickOrTreat permissions
+    children:
+      trickortreat.horseman: true
+      trickortreat.reload: true
+      trickortreat.bypass.cooldown: true
+
+  trickortreat.horseman:
+    default: op
+    description: Use /tt horseman to attempt boss spawn
+
+  trickortreat.reload:
+    default: op
+    description: Reload all configs & handlers with /tt reload
+
+  trickortreat.bypass.cooldown:
+    default: op
+    description: Bypass villager/pumpkin cooldowns

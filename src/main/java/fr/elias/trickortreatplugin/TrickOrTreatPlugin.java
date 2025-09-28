@@ -22,6 +22,11 @@ public class TrickOrTreatPlugin extends JavaPlugin {
     private final Map<UUID, Long> cooldowns = new HashMap<>();
     private LibsDisguisesHandler disguises;
     private PumpkinHuntHandler pumpkinHandler;
+    private int autoTaskId = -1;
+    private BossEventListener bossListener;
+    private MobSpawnHandler mobHandler;
+    private VillagerInteractionHandler villagerHandler;
+    private LoginDisguiseListener loginListener;
 
     @Override
     public void onEnable() {
@@ -35,14 +40,12 @@ public class TrickOrTreatPlugin extends JavaPlugin {
         hauntedMobsConfig = load("hauntedmobs.yml");
         pumpkinHuntConfig = load("pumpkinhunt.yml");
 
-        // Initialize Boss Manager (uses hauntedmobs.yml for boss settings)
-// Initialize Boss Manager (uses hauntedmobs.yml for boss settings)
+        // Boss manager
         bossSpawnManager = new BossSpawnManager(
                 this,
                 hauntedMobsConfig.getConfigurationSection("boss-mobs.headless-horseman"),
                 hauntedMobsConfig
         );
-
 
         // LibsDisguises integration (from config.yml)
         boolean ldEnabled = getConfig().getBoolean("libdisguise.enabled", false);
@@ -56,35 +59,39 @@ public class TrickOrTreatPlugin extends JavaPlugin {
                 getLogger().warning("libdisguise.enabled = true in config.yml, but LibsDisguises is not installed.");
             }
         }
-// === Auto-spawn scheduler ===
+
+        // === Auto-spawn scheduler (store task id for reload) ===
         ConfigurationSection bossSec = hauntedMobsConfig.getConfigurationSection("boss-mobs.headless-horseman");
         if (bossSec != null) {
             ConfigurationSection auto = bossSec.getConfigurationSection("auto");
             if (auto != null && auto.getBoolean("enabled", false)) {
                 long intervalSec = Math.max(5, auto.getLong("interval-seconds", 60));
-                getServer().getScheduler().runTaskTimer(
+                autoTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(
                         this,
                         bossSpawnManager::tryAutoSpawn,
-                        20L * 5,                 // initial delay 5s
-                        20L * intervalSec        // repeat every N seconds
+                        20L * 5,               // initial delay 5s
+                        20L * intervalSec      // repeat every N seconds
                 );
                 getLogger().info("Headless Horseman auto-spawn enabled (" + intervalSec + "s interval).");
             }
         }
 
-
-        // Register listeners
+        // === Register listeners (store references so we can unregister on reload) ===
         PluginManager pm = getServer().getPluginManager();
 
-        // Create once and register once
-        pumpkinHandler = new PumpkinHuntHandler(this, pumpkinHuntConfig);
+        pumpkinHandler   = new PumpkinHuntHandler(this, pumpkinHuntConfig);
+        bossListener     = new BossEventListener(bossSpawnManager);
+        mobHandler       = new MobSpawnHandler(this, hauntedMobsConfig, disguises);
+        villagerHandler  = new VillagerInteractionHandler(this, disguises, hauntedMobsConfig);
+        loginListener    = new LoginDisguiseListener(this, disguises);
+
         pm.registerEvents(pumpkinHandler, this);
+        pm.registerEvents(bossListener, this);
+        pm.registerEvents(mobHandler, this);
+        pm.registerEvents(villagerHandler, this);
+        pm.registerEvents(loginListener, this);
 
-        pm.registerEvents(new BossEventListener(bossSpawnManager), this);
-        pm.registerEvents(new MobSpawnHandler(this, hauntedMobsConfig, disguises), this);
-        pm.registerEvents(new VillagerInteractionHandler(this, disguises, hauntedMobsConfig), this);
-        pm.registerEvents(new LoginDisguiseListener(this, disguises), this);
-
+        // Command
         if (getCommand("tt") != null) {
             TrickOrTreatCommand executor = new TrickOrTreatCommand(this);
             getCommand("tt").setExecutor(executor);
@@ -93,6 +100,7 @@ public class TrickOrTreatPlugin extends JavaPlugin {
             getLogger().warning("Command 'tt' not found in plugin.yml");
         }
 
+        // Placeholders
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
             new TrickOrTreatPlaceholders(this).register();
             getLogger().info("PlaceholderAPI detected – registered %trickortreat_*% placeholders.");
@@ -102,6 +110,7 @@ public class TrickOrTreatPlugin extends JavaPlugin {
 
         getLogger().info("TrickOrTreatPlugin is enabled.");
     }
+
 
     @Override
     public void onDisable() {
@@ -116,6 +125,76 @@ public class TrickOrTreatPlugin extends JavaPlugin {
     private void saveResourceIfMissing(String name) {
         File f = new File(getDataFolder(), name);
         if (!f.exists()) saveResource(name, false);
+    }
+    public void reloadAll() {
+        // Persist current state first
+        try {
+            if (pumpkinHandler != null) pumpkinHandler.saveState();
+        } catch (Exception ignored) {}
+
+        // Cancel scheduled auto task if running
+        if (autoTaskId != -1) {
+            getServer().getScheduler().cancelTask(autoTaskId);
+            autoTaskId = -1;
+        }
+
+        // Unregister listeners safely
+        try { org.bukkit.event.HandlerList.unregisterAll(pumpkinHandler); } catch (Throwable ignored) {}
+        try { org.bukkit.event.HandlerList.unregisterAll(bossListener); }   catch (Throwable ignored) {}
+        try { org.bukkit.event.HandlerList.unregisterAll(mobHandler); }     catch (Throwable ignored) {}
+        try { org.bukkit.event.HandlerList.unregisterAll(villagerHandler);} catch (Throwable ignored) {}
+        try { org.bukkit.event.HandlerList.unregisterAll(loginListener); }  catch (Throwable ignored) {}
+
+        // Reload YAML configs
+        reloadConfig();
+        hauntedMobsConfig = load("hauntedmobs.yml");
+        pumpkinHuntConfig = load("pumpkinhunt.yml");
+
+        // Rebuild Boss manager with fresh config section
+        ConfigurationSection bossSec = hauntedMobsConfig.getConfigurationSection("boss-mobs.headless-horseman");
+        bossSpawnManager = new BossSpawnManager(
+                this,
+                bossSec,
+                hauntedMobsConfig
+        );
+
+        // Rebuild LibsDisguises handler per new config
+        boolean ldEnabled = getConfig().getBoolean("libdisguise.enabled", false);
+        boolean ldPresent = getServer().getPluginManager().getPlugin("LibsDisguises") != null;
+        if (ldEnabled && ldPresent) {
+            disguises = new LibsDisguisesHandler(getLogger());
+        } else {
+            disguises = null;
+        }
+
+        // Reschedule auto-spawn if configured
+        if (bossSec != null) {
+            ConfigurationSection auto = bossSec.getConfigurationSection("auto");
+            if (auto != null && auto.getBoolean("enabled", false)) {
+                long intervalSec = Math.max(5, auto.getLong("interval-seconds", 60));
+                autoTaskId = getServer().getScheduler().scheduleSyncRepeatingTask(
+                        this,
+                        bossSpawnManager::tryAutoSpawn,
+                        20L * 5,
+                        20L * intervalSec
+                );
+            }
+        }
+
+        // Re-register listeners bound to refreshed configs
+        PluginManager pm = getServer().getPluginManager();
+
+        pumpkinHandler   = new PumpkinHuntHandler(this, pumpkinHuntConfig);
+        bossListener     = new BossEventListener(bossSpawnManager);
+        mobHandler       = new MobSpawnHandler(this, hauntedMobsConfig, disguises);
+        villagerHandler  = new VillagerInteractionHandler(this, disguises, hauntedMobsConfig);
+        loginListener    = new LoginDisguiseListener(this, disguises);
+
+        pm.registerEvents(pumpkinHandler, this);
+        pm.registerEvents(bossListener, this);
+        pm.registerEvents(mobHandler, this);
+        pm.registerEvents(villagerHandler, this);
+        pm.registerEvents(loginListener, this);
     }
 
     private FileConfiguration load(String fileName) {
