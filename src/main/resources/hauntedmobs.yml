@@ -25,6 +25,9 @@ jump-scares:
 
 boss-mobs:
   headless-horseman:
+    # Visible custom name above the boss (used for skeleton.getCustomName())
+    display-name: "&cHeadless Horseman"
+    message-on-spawn: "&aThe Headless Horseman rides again!"
     # Make spawning deterministic for testing
     spawn-chance: 1.0
     health: 150.0
@@ -45,7 +48,7 @@ boss-mobs:
     # Short cooldown so auto-spawns can re-trigger quickly while testing
     cooldown-of-spawn-after-death: 30
 
-    message-on-spawn: "The Haunted Horseman has spawned in the arena"
+
 
     # --- Auto spawner: FAST test values ---
     auto:

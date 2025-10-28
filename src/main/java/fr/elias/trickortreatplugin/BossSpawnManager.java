@@ -102,6 +102,10 @@ public class BossSpawnManager {
         }
         doSpawnAt(loc, /*forceChunk*/ shouldForceChunkForAutoMode());
     }
+    private String colorize(String s) {
+        if (s == null) return null;
+        return ChatColor.translateAlternateColorCodes('&', s);
+    }
 
     public boolean spawnHeadlessHorsemanAtConfiguredCenter() {
         if (bossCfg == null) return false;
@@ -261,10 +265,28 @@ public class BossSpawnManager {
 
     private boolean isHorsemanSkeleton(Entity e) {
         if (!(e instanceof Skeleton)) return false;
-        String name = e.getCustomName();
-        if (name != null && "Headless Horseman".equalsIgnoreCase(ChatColor.stripColor(name))) return true;
-        return e.getScoreboardTags().contains(TAG_BOSS);
+
+        // Check scoreboard tag first (this is the most reliable)
+        if (e.getScoreboardTags().contains(TAG_BOSS)) {
+            return true;
+        }
+
+        // Fallback: match custom name (stripped) to stripped configured name
+        String rawConfigured = bossCfg.getString("display-name", "&cHeadless Horseman");
+        String coloredConfigured = colorize(rawConfigured);
+        String strippedConfigured = ChatColor.stripColor(coloredConfigured);
+
+        String actualName = e.getCustomName();
+        if (actualName != null) {
+            String strippedActual = ChatColor.stripColor(actualName);
+            if (strippedConfigured.equalsIgnoreCase(strippedActual)) {
+                return true;
+            }
+        }
+
+        return false;
     }
+
 
     private void doSpawnAt(Location loc, boolean forceChunk) {
         World w = loc.getWorld();
@@ -284,9 +306,14 @@ public class BossSpawnManager {
         horse.addScoreboardTag(TAG_BOSS);
         sk.addScoreboardTag(TAG_BOSS);
 
-        String display = ChatColor.RED + "Headless Horseman";
-        sk.setCustomName(display);
+    // Boss display name from config
+        String rawName = bossCfg.getString("display-name", "&cHeadless Horseman");
+        String coloredName = colorize(rawName);
+
+    // store on skeleton
+        sk.setCustomName(coloredName);
         sk.setCustomNameVisible(true);
+
 
         double maxHp = bossCfg.getDouble("health", 150.0);
         if (sk.getAttribute(Attribute.MAX_HEALTH) != null) {
@@ -303,10 +330,18 @@ public class BossSpawnManager {
         }
         sk.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, Integer.MAX_VALUE, 1, true, false, true));
 
-        String spawnMsg   = bossCfg.getString("message-on-spawn", "The Headless Horseman rides again!");
+        String spawnMsg   = bossCfg.getString(
+                "message-on-spawn",
+                "&aThe Headless Horseman rides again!"
+        );
         String spawnSound = bossCfg.getString("sound", "entity_lightning_bolt_thunder");
-        Bukkit.broadcastMessage(ChatColor.GREEN + spawnMsg);
+
+        // colorize before broadcast
+        Bukkit.broadcastMessage(colorize(spawnMsg));
+
+        // play sound same as before
         playWorldSoundSafe(loc, spawnSound, 1.0f, 1.0f);
+
 
         activeBossId = sk.getUniqueId();
         startMinionWaves(sk);
