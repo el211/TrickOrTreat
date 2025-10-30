@@ -53,6 +53,9 @@ public class BossSpawnManager {
     private int     bossChunkX      = 0;
     private int     bossChunkZ      = 0;
 
+    // Track last player who damaged the *current* boss
+    private UUID lastBossDamager = null;
+
     public BossSpawnManager(JavaPlugin plugin, ConfigurationSection bossConfig, FileConfiguration hauntedMobsConfig) {
         this.plugin = plugin;
         this.bossCfg = bossConfig;
@@ -62,6 +65,28 @@ public class BossSpawnManager {
                 : 3600_000L;
         // Try to adopt an existing boss on startup (e.g., after /reload)
         adoptExistingBossIfAny();
+    }
+
+    public void noteBossDamagedBy(UUID playerId) {
+        // only track while this boss is alive
+        if (isBossAlive() && playerId != null) {
+            lastBossDamager = playerId;
+        }
+    }
+
+    private Player resolveKillerFallback(EntityDeathEvent event) {
+        // 1) Vanilla killer if present
+        Player k = event.getEntity().getKiller();
+        if (k != null) return k;
+
+        // 2) Our last-hit cache
+        if (lastBossDamager != null) {
+            Player p = Bukkit.getPlayer(lastBossDamager);
+            if (p != null && p.isOnline()) return p;
+        }
+
+        // 3) Nearest player within 24 blocks as a last resort
+        return getNearestPlayer(event.getEntity().getLocation(), 24.0);
     }
 
     /* =========================
@@ -102,6 +127,7 @@ public class BossSpawnManager {
         }
         doSpawnAt(loc, /*forceChunk*/ shouldForceChunkForAutoMode());
     }
+
     private String colorize(String s) {
         if (s == null) return null;
         return ChatColor.translateAlternateColorCodes('&', s);
@@ -171,22 +197,27 @@ public class BossSpawnManager {
        ========================= */
 
     public void onBossDeath(EntityDeathEvent event) {
-        // Only react if this is the currently tracked rider
-        if (isBossAlive()) {
-            Entity current = Bukkit.getEntity(activeBossId);
-            if (current != null && current.getUniqueId().equals(event.getEntity().getUniqueId())) {
-                clearActiveBoss(true);
-            }
+        Entity dead = event.getEntity();
+
+        // Only continue if the dead entity IS the tracked boss
+        if (!isCurrentBoss(dead)) {
+            return;
         }
 
+        // Clear active boss + start cooldown + reset last hitter
+        clearActiveBoss(true);
+
+        // Broadcast message
         String msg = cfg.getString("boss-mobs.headless-horseman.reward.message",
                 "The Headless Horseman has been slain!");
         Bukkit.broadcastMessage(ChatColor.GOLD + ChatColor.translateAlternateColorCodes('&', msg));
 
+        // Reward commands to credited player (fallback finder)
         List<String> cmds = cfg.getStringList("boss-mobs.headless-horseman.reward.random-commands");
-        if (!cmds.isEmpty() && event.getEntity().getKiller() != null) {
+        Player credited = resolveKillerFallback(event);
+        if (!cmds.isEmpty() && credited != null) {
             String cmd = cmds.get(new Random().nextInt(cmds.size()));
-            String finalCmd = cmd.replace("%player%", event.getEntity().getKiller().getName());
+            String finalCmd = cmd.replace("%player%", credited.getName());
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCmd);
         }
 
@@ -235,6 +266,12 @@ public class BossSpawnManager {
        Internals
        ========================= */
 
+    public boolean isCurrentBoss(Entity e) {
+        if (e == null) return false;
+        if (activeBossId == null) return false;
+        return activeBossId.equals(e.getUniqueId());
+    }
+
     private void clearActiveBoss(boolean onDeath) {
         // stop minion waves
         if (minionTaskId != -1) {
@@ -253,7 +290,10 @@ public class BossSpawnManager {
         // unforce boss chunk
         unforceBossChunkIfNeeded();
 
+        // reset tracking
         activeBossId = null;
+        lastBossDamager = null;
+
         if (onDeath) lastAutoSpawnMs = System.currentTimeMillis();
     }
 
@@ -287,7 +327,6 @@ public class BossSpawnManager {
         return false;
     }
 
-
     private void doSpawnAt(Location loc, boolean forceChunk) {
         World w = loc.getWorld();
         if (w == null) return;
@@ -306,14 +345,13 @@ public class BossSpawnManager {
         horse.addScoreboardTag(TAG_BOSS);
         sk.addScoreboardTag(TAG_BOSS);
 
-    // Boss display name from config
+        // Boss display name from config
         String rawName = bossCfg.getString("display-name", "&cHeadless Horseman");
         String coloredName = colorize(rawName);
 
-    // store on skeleton
+        // store on skeleton
         sk.setCustomName(coloredName);
         sk.setCustomNameVisible(true);
-
 
         double maxHp = bossCfg.getDouble("health", 150.0);
         if (sk.getAttribute(Attribute.MAX_HEALTH) != null) {
@@ -341,7 +379,6 @@ public class BossSpawnManager {
 
         // play sound same as before
         playWorldSoundSafe(loc, spawnSound, 1.0f, 1.0f);
-
 
         activeBossId = sk.getUniqueId();
         startMinionWaves(sk);

@@ -7,6 +7,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -23,7 +24,9 @@ public class TrickOrTreatPlugin extends JavaPlugin {
     private LibsDisguisesHandler disguises;
     private PumpkinHuntHandler pumpkinHandler;
     private int autoTaskId = -1;
+
     private BossEventListener bossListener;
+    private BossCombatListener combatListener; // NEW: track last hitter for boss rewards
     private MobSpawnHandler mobHandler;
     private VillagerInteractionHandler villagerHandler;
     private LoginDisguiseListener loginListener;
@@ -80,13 +83,15 @@ public class TrickOrTreatPlugin extends JavaPlugin {
         PluginManager pm = getServer().getPluginManager();
 
         pumpkinHandler   = new PumpkinHuntHandler(this, pumpkinHuntConfig);
-        bossListener     = new BossEventListener(bossSpawnManager);
+        bossListener     = new BossEventListener(bossSpawnManager);      // forwards deaths to manager
+        combatListener   = new BossCombatListener(bossSpawnManager);     // NEW: captures last damaging player
         mobHandler       = new MobSpawnHandler(this, hauntedMobsConfig, disguises);
         villagerHandler  = new VillagerInteractionHandler(this, disguises, hauntedMobsConfig);
         loginListener    = new LoginDisguiseListener(this, disguises);
 
         pm.registerEvents(pumpkinHandler, this);
         pm.registerEvents(bossListener, this);
+        pm.registerEvents(combatListener, this); // NEW
         pm.registerEvents(mobHandler, this);
         pm.registerEvents(villagerHandler, this);
         pm.registerEvents(loginListener, this);
@@ -111,12 +116,27 @@ public class TrickOrTreatPlugin extends JavaPlugin {
         getLogger().info("TrickOrTreatPlugin is enabled.");
     }
 
-
     @Override
     public void onDisable() {
-        if (pumpkinHandler != null) {
-            pumpkinHandler.saveState(); // saves progress + placed/grown markers
+        // Cancel auto task if running
+        if (autoTaskId != -1) {
+            getServer().getScheduler().cancelTask(autoTaskId);
+            autoTaskId = -1;
         }
+
+        // Despawn boss & clean up entities safely
+        if (bossSpawnManager != null) {
+            try { bossSpawnManager.despawnIfAlive(); } catch (Throwable ignored) {}
+        }
+
+        // Persist pumpkin handler state
+        if (pumpkinHandler != null) {
+            try { pumpkinHandler.saveState(); } catch (Throwable ignored) {}
+        }
+
+        // Unregister all listeners bound to this plugin instance
+        try { HandlerList.unregisterAll(this); } catch (Throwable ignored) {}
+
         getLogger().info("TrickOrTreatPlugin is disabled.");
     }
 
@@ -126,6 +146,7 @@ public class TrickOrTreatPlugin extends JavaPlugin {
         File f = new File(getDataFolder(), name);
         if (!f.exists()) saveResource(name, false);
     }
+
     public void reloadAll() {
         // Persist current state first
         try {
@@ -138,12 +159,13 @@ public class TrickOrTreatPlugin extends JavaPlugin {
             autoTaskId = -1;
         }
 
-        // Unregister listeners safely
-        try { org.bukkit.event.HandlerList.unregisterAll(pumpkinHandler); } catch (Throwable ignored) {}
-        try { org.bukkit.event.HandlerList.unregisterAll(bossListener); }   catch (Throwable ignored) {}
-        try { org.bukkit.event.HandlerList.unregisterAll(mobHandler); }     catch (Throwable ignored) {}
-        try { org.bukkit.event.HandlerList.unregisterAll(villagerHandler);} catch (Throwable ignored) {}
-        try { org.bukkit.event.HandlerList.unregisterAll(loginListener); }  catch (Throwable ignored) {}
+        // Unregister listeners safely (each may be null on first boot)
+        try { HandlerList.unregisterAll(pumpkinHandler); } catch (Throwable ignored) {}
+        try { HandlerList.unregisterAll(bossListener); }   catch (Throwable ignored) {}
+        try { HandlerList.unregisterAll(combatListener); } catch (Throwable ignored) {} // NEW
+        try { HandlerList.unregisterAll(mobHandler); }     catch (Throwable ignored) {}
+        try { HandlerList.unregisterAll(villagerHandler);} catch (Throwable ignored) {}
+        try { HandlerList.unregisterAll(loginListener); }  catch (Throwable ignored) {}
 
         // Reload YAML configs
         reloadConfig();
@@ -186,12 +208,14 @@ public class TrickOrTreatPlugin extends JavaPlugin {
 
         pumpkinHandler   = new PumpkinHuntHandler(this, pumpkinHuntConfig);
         bossListener     = new BossEventListener(bossSpawnManager);
+        combatListener   = new BossCombatListener(bossSpawnManager); // NEW
         mobHandler       = new MobSpawnHandler(this, hauntedMobsConfig, disguises);
         villagerHandler  = new VillagerInteractionHandler(this, disguises, hauntedMobsConfig);
         loginListener    = new LoginDisguiseListener(this, disguises);
 
         pm.registerEvents(pumpkinHandler, this);
         pm.registerEvents(bossListener, this);
+        pm.registerEvents(combatListener, this); // NEW
         pm.registerEvents(mobHandler, this);
         pm.registerEvents(villagerHandler, this);
         pm.registerEvents(loginListener, this);
